@@ -52,7 +52,7 @@ Cute Mouse Driver is part of FreeDos project and is free and open source.
 ## Jumper Settings
 
 There are two jumpers, which can be used to set different modes. Currently you
-can choose between 2- and 3-button and wheel mouse modes. In the table below O means open or unset and X means closed or set. The KVM Hack mode is an experimental mode where the PS2 mouse is not reset, but assumed to be initialized and in stream mode. 
+can choose between 2- and 3-button and wheel mouse modes. In the table below O means open or unset and X means closed or set. The KVM Hack mode is an experimental mode where the PS2 mouse is not reset, but assumed to be initialized and in stream mode. This is done to work around incompatibilities with some KVM switches. 
 
 JP1  |JP2  |Description
 -----|-----|------------------------------
