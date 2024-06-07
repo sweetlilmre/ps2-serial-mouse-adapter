@@ -4,8 +4,9 @@
 static const int RS232_RTS = 3;
 
 static Ps2Mouse mouse;
-static bool threeButtons = false;
+static bool twoButtons = false;
 static bool wheelMouse = false;
+static bool kvmHack = false;
 
 static void sendSerialBit(int data) {
   // Delay between the signals to match 1200 baud
@@ -41,7 +42,7 @@ static void sendToSerial(const Ps2Mouse::Data& data) {
   sendSerialByte(0x40 | lb | rb | ((dy >> 4) & 0xC) | ((dx >> 6) & 0x3));
   sendSerialByte(dx & 0x3F);
   sendSerialByte(dy & 0x3F);
-  if (threeButtons) {
+  if (!twoButtons) {
     byte mb;
     if (wheelMouse) {
       mb = data.middleButton ? 0x10 : 0;
@@ -58,13 +59,15 @@ static void initSerialPort() {
   RS_SETTXHIGH;
   delayMicroseconds(10000);
   sendSerialByte('M');
-  if(threeButtons) {
+  if(!twoButtons) {
     if(wheelMouse) {
       sendSerialByte('Z');
     } else {
       sendSerialByte('3');
     }
     Serial.println(wheelMouse ? "Init Wheel mode" : "Init 3-button mode");
+  } else {
+    Serial.println("Init 2-button mode");
   }
   delayMicroseconds(10000);
 
@@ -76,7 +79,7 @@ static void initSerialPort() {
 static void initPs2Port() {
   Serial.println("Reseting PS/2 mouse");
   
-  if (mouse.reset(true)) {
+  if (mouse.reset(true, kvmHack)) {
     Serial.println("PS/2 mouse reset OK");
   } else {
     Serial.println("Failed to reset PS/2 mouse");
@@ -110,9 +113,15 @@ void setup() {
   JP34_DIRIN_UP;
   LED_DIROUT;
   LED_SET(HIGH);
-  threeButtons = JP12_READ;
-  wheelMouse = (JP34_READ == LOW);
   Serial.begin(115200);
+  twoButtons = (JP12_READ == LOW);
+  wheelMouse = (JP34_READ == LOW);
+  if (wheelMouse && twoButtons) {
+    twoButtons = false;
+    wheelMouse = false;
+    kvmHack = true;
+    Serial.println("KVM hack enabled");
+  }
   initSerialPort();
   initPs2Port();
   Serial.println("Setup done!");

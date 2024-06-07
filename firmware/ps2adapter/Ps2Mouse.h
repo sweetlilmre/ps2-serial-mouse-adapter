@@ -27,7 +27,7 @@ public:
 
   Ps2Mouse();
 
-  bool reset(bool streaming);
+  bool reset(bool streaming, bool kvmHack);
 
   bool setScaling(bool flag) const;
   bool setResolution(byte resolution) const;

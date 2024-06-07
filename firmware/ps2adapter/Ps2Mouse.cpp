@@ -191,19 +191,23 @@ Ps2Mouse::Ps2Mouse()
   : m_stream(false), m_wheelMouse(false)
 {}
 
-bool Ps2Mouse::reset(bool streaming) {
+bool Ps2Mouse::reset(bool streaming, bool kvmHack) {
   Impl impl{*this};
-  if (!impl.sendCommand(Command::reset)) {
-      return false;
-  }
-
   byte reply;
-  if (!impl.recvByte(reply) || reply != byte(Response::selfTestPassed)) {
-      return false;
-  }
 
-  if (!impl.recvByte(reply) || reply != byte(Response::isMouse)) {
-      return false;
+  // don't send reset command if we are in kvmHack mode
+  if (!kvmHack) {
+    if (!impl.sendCommand(Command::reset)) {
+        return false;
+    }
+
+    if (!impl.recvByte(reply) || reply != byte(Response::selfTestPassed)) {
+        return false;
+    }
+
+    if (!impl.recvByte(reply) || reply != byte(Response::isMouse)) {
+        return false;
+    }
   }
 
   // Determine if this is a wheel mouse
