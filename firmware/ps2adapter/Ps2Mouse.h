@@ -11,17 +11,23 @@ public:
     bool rightButton;
     int  xMovement;
     int  yMovement;
+    int  wheelMovement;
   };
 
   struct Settings {
+    bool rightBtn;
+    bool middleBtn;
+    bool leftBtn;
     bool scaling;
+    bool enable;
+    bool remoteMode;
     byte resolution;
     byte sampleRate;
   };
-  
-  Ps2Mouse(int clockPin, int dataPin);
 
-  bool reset() const;
+  Ps2Mouse();
+
+  bool reset(bool streaming);
 
   bool setScaling(bool flag) const;
   bool setResolution(byte resolution) const;
@@ -29,14 +35,13 @@ public:
 
   bool getSettings(Settings& settings) const;
 
-  bool enableStreaming() const;
-  bool disableStreaming() const;
+  bool enableStreaming();
+  bool disableStreaming();
   bool readData(Data& data) const;
 
 private:
   struct Impl;
 
-  int m_clockPin;
-  int m_dataPin;
   bool m_stream;
+  bool m_wheelMouse;
 };

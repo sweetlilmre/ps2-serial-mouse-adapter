@@ -1,20 +1,16 @@
+#include "ProMini.h"
 #include "Ps2Mouse.h"
 
-static const int PS2_CLOCK = 2;
-static const int PS2_DATA  = 17;
 static const int RS232_RTS = 3;
-static const int RS232_TX  = 4;
-static const int JP12 = 11;
-static const int JP34 = 12;
-static const int LED = 13;
 
-static Ps2Mouse mouse(PS2_CLOCK, PS2_DATA);
+static Ps2Mouse mouse;
 static bool threeButtons = false;
+static bool wheelMouse = false;
 
 static void sendSerialBit(int data) {
   // Delay between the signals to match 1200 baud
   static const auto usDelay = 1000000 / 1200;
-  digitalWrite(RS232_TX, data);
+  RS_SETTX(data);
   delayMicroseconds(usDelay);
 }
 
@@ -46,19 +42,29 @@ static void sendToSerial(const Ps2Mouse::Data& data) {
   sendSerialByte(dx & 0x3F);
   sendSerialByte(dy & 0x3F);
   if (threeButtons) {
-    byte mb = data.middleButton ? 0x20 : 0;
+    byte mb;
+    if (wheelMouse) {
+      mb = data.middleButton ? 0x10 : 0;
+      mb |= (data.wheelMovement & 0x0F);
+    } else {
+      mb = data.middleButton ? 0x20 : 0;
+    }
     sendSerialByte(mb);
   }
 }
 
 static void initSerialPort() {
   Serial.println("Starting serial port");
-  digitalWrite(RS232_TX, HIGH);
+  RS_SETTXHIGH;
   delayMicroseconds(10000);
   sendSerialByte('M');
   if(threeButtons) {
-    sendSerialByte('3');
-    Serial.println("Init 3-buttons mode");
+    if(wheelMouse) {
+      sendSerialByte('Z');
+    } else {
+      sendSerialByte('3');
+    }
+    Serial.println(wheelMouse ? "Init Wheel mode" : "Init 3-button mode");
   }
   delayMicroseconds(10000);
 
@@ -69,8 +75,18 @@ static void initSerialPort() {
 
 static void initPs2Port() {
   Serial.println("Reseting PS/2 mouse");
-  mouse.reset();
-  mouse.setSampleRate(20);
+  
+  if (mouse.reset(true)) {
+    Serial.println("PS/2 mouse reset OK");
+  } else {
+    Serial.println("Failed to reset PS/2 mouse");
+  }
+
+  if (mouse.setSampleRate(20)) {
+    Serial.println("Sample rate set to 20");
+  } else {
+    Serial.println("Failed to set sample rate");
+  }
 
   Ps2Mouse::Settings settings;
   if (mouse.getSettings(settings)) {
@@ -80,29 +96,29 @@ static void initPs2Port() {
     Serial.println(settings.resolution);
     Serial.print("samplingRate = ");
     Serial.println(settings.sampleRate);
+  } else {
+    Serial.println("Failed to get settings");
   }
 }
 
 void setup() {
   // PS/2 Data input must be initialized shortly after power on,
   // or the mouse will not initialize
-  pinMode(PS2_DATA, INPUT_PULLUP);
-  pinMode(RS232_TX, OUTPUT);
-  pinMode(JP12, INPUT_PULLUP);
-  pinMode(JP34, INPUT_PULLUP);
-  pinMode(LED, OUTPUT);
-  digitalWrite(LED, HIGH);
-  threeButtons = digitalRead(JP12);
+  PS2_DIRDATAIN_UP;
+  RS_DIRTXOUT;
+  JP12_DIRIN_UP;
+  JP34_DIRIN_UP;
+  LED_DIROUT;
+  LED_SET(HIGH);
+  threeButtons = JP12_READ;
+  wheelMouse = (JP34_READ == LOW);
   Serial.begin(115200);
   initSerialPort();
   initPs2Port();
   Serial.println("Setup done!");
-  digitalWrite(LED, LOW);
-  if (digitalRead(JP34) == LOW) {
-    Serial.println("Enabling streaming mode");
-    mouse.enableStreaming();
-  }
+  LED_SETLOW;
 }
+
 
 void loop() {
   Ps2Mouse::Data data;

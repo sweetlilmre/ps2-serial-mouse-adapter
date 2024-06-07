@@ -1,3 +1,4 @@
+#include "ProMini.h"
 #include "Ps2Mouse.h"
 
 namespace {
@@ -30,6 +31,7 @@ struct Packet {
 
   byte xMovement;
   byte yMovement;
+  byte wheelData;
 };
 
 enum class Command {
@@ -52,6 +54,7 @@ enum class Command {
 
 enum class Response {
   isMouse        = 0x00,
+  isWheelMouse   = 0x03,
   selfTestPassed = 0xAA,
   ack            = 0xFA,
   error          = 0xFC,
@@ -64,29 +67,29 @@ struct Ps2Mouse::Impl {
   const Ps2Mouse& m_ref;
 
   void sendBit(int value) const {
-    while (digitalRead(m_ref.m_clockPin) != LOW) {}
-    digitalWrite(m_ref.m_dataPin, value);
-    while (digitalRead(m_ref.m_clockPin) != HIGH) {}
+    while (PS2_READCLOCK != LOW) {}
+    PS2_SETDATA(value);
+    while (PS2_READCLOCK != HIGH) {}
   }
 
   int recvBit() const {
-    while (digitalRead(m_ref.m_clockPin) != LOW) {}
-    auto result = digitalRead(m_ref.m_dataPin);
-    while (digitalRead(m_ref.m_clockPin) != HIGH) {}
+    while (PS2_READCLOCK != LOW) {}
+    auto result = PS2_READDATA;
+    while (PS2_READCLOCK != HIGH) {}
     return result;
   }
 
   bool sendByte(byte value) const {
 
     // Inhibit communication
-    pinMode(m_ref.m_clockPin, OUTPUT);
-    digitalWrite(m_ref.m_clockPin, LOW);
+    PS2_DIRCLOCKOUT;
+    PS2_SETCLOCKLOW;
     delayMicroseconds(10);
 
     // Set start bit and release the clock
-    pinMode(m_ref.m_dataPin, OUTPUT);
-    digitalWrite(m_ref.m_dataPin, LOW);
-    pinMode(m_ref.m_clockPin, INPUT_PULLUP);
+    PS2_DIRDATAOUT;
+    PS2_SETDATALOW;
+    PS2_DIRCLOCKIN_UP;
 
     // Send data bits
     byte parity = 1;
@@ -103,15 +106,15 @@ struct Ps2Mouse::Impl {
     sendBit(1);
 
     // Enter receive mode and wait for ACK bit
-    pinMode(m_ref.m_dataPin, INPUT);
+    PS2_DIRDATAIN;
     return recvBit() == 0;
   }
 
   bool recvByte(byte& value) const {
 
     // Enter receive mode
-    pinMode(m_ref.m_clockPin, INPUT);
-    pinMode(m_ref.m_dataPin, INPUT);
+    PS2_DIRCLOCKIN;
+    PS2_DIRDATAIN;
 
     // Receive start bit
     if (recvBit() != 0) {
@@ -147,11 +150,9 @@ struct Ps2Mouse::Impl {
     return true;
   }
 
-  template <typename T>
-  bool recvData(T& data) const {
-    auto ptr = reinterpret_cast<byte*>(&data);
-    for (auto i = 0u; i < sizeof(data); i++) {
-      if (!recvByte(ptr[i])) {
+  bool recvData(byte* data, size_t size) const {
+    for (size_t i = 0u; i < size; i++) {
+      if (!recvByte(data[i])) {
         return false;
       }
     }
@@ -182,15 +183,15 @@ struct Ps2Mouse::Impl {
   }
 
   bool getStatus(Status& status) const {
-    return sendCommand(Command::statusRequest) && recvData(status);
+    return sendCommand(Command::statusRequest) && recvData((byte*) &status, sizeof(Status));
   }
 };
 
-Ps2Mouse::Ps2Mouse(int clockPin, int dataPin)
-  : m_clockPin(clockPin), m_dataPin(dataPin), m_stream(false)
+Ps2Mouse::Ps2Mouse()
+  : m_stream(false), m_wheelMouse(false)
 {}
 
-bool Ps2Mouse::reset() const {
+bool Ps2Mouse::reset(bool streaming) {
   Impl impl{*this};
   if (!impl.sendCommand(Command::reset)) {
       return false;
@@ -205,32 +206,91 @@ bool Ps2Mouse::reset() const {
       return false;
   }
 
+  // Determine if this is a wheel mouse
+  if (!impl.sendCommand(Command::setSampleRate, 200) ||
+      !impl.sendCommand(Command::setSampleRate, 100) ||
+      !impl.sendCommand(Command::setSampleRate, 80) ||
+      !impl.sendCommand(Command::getDeviceId) ||
+      !impl.recvByte(reply)) {
+      return false;
+  }
+
+  m_wheelMouse = (reply == byte(Response::isWheelMouse));
+
+  if (streaming) {
+    // Streaming mode is the default after a reset.
+    m_stream = true;
+    // switch on data reporting
+    return impl.sendCommand(Command::enableDataReporting);
+  }
+
   return disableStreaming() && impl.sendCommand(Command::enableDataReporting);
 }
 
-bool Ps2Mouse::enableStreaming() const {
-  return Impl{*this}.sendCommand(Command::setStreamMode);
+bool Ps2Mouse::enableStreaming() {
+  if (Impl{*this}.sendCommand(Command::setStreamMode)) {
+    m_stream = true;
+    return true;
+  }
+  return false;
 }
 
-bool Ps2Mouse::disableStreaming() const {
-  return Impl{*this}.sendCommand(Command::setRemoteMode);
+bool Ps2Mouse::disableStreaming() {
+  if (Impl{*this}.sendCommand(Command::setRemoteMode)) {
+    m_stream = false;
+    return true;
+  }
+  return false;
 }
 
 bool Ps2Mouse::setScaling(bool flag) const {
-  return Impl{*this}.sendCommand(flag ? Command::enableScaling : Command::disableScaling);
+  if (m_stream) {
+    Impl{*this}.sendCommand(Command::disableDataReporting);
+  }
+  bool res =  Impl{*this}.sendCommand(flag ? Command::enableScaling : Command::disableScaling);
+  if (m_stream) {
+    Impl{*this}.sendCommand(Command::enableDataReporting);
+  }
+  return res;
 }
 
 bool Ps2Mouse::setResolution(byte resolution) const {
-  return Impl{*this}.sendCommand(Command::setResolution, resolution);
+  if (m_stream) {
+    Impl{*this}.sendCommand(Command::disableDataReporting);
+  }
+  bool res = Impl{*this}.sendCommand(Command::setResolution, resolution);
+  if (m_stream) {
+    Impl{*this}.sendCommand(Command::enableDataReporting);
+  }
+  return res;
 }
 
 bool Ps2Mouse::setSampleRate(byte sampleRate) const {
-  return Impl{*this}.sendCommand(Command::setSampleRate, sampleRate);
+  if (m_stream) {
+    Impl{*this}.sendCommand(Command::disableDataReporting);
+  }
+  bool res = Impl{*this}.sendCommand(Command::setSampleRate, sampleRate);
+  if (m_stream) {
+    Impl{*this}.sendCommand(Command::enableDataReporting);
+  }
+  return res;
 }
 
 bool Ps2Mouse::getSettings(Settings& settings) const {
   Status status;
-  if (Impl{*this}.getStatus(status)) {
+  if (m_stream) {
+    Impl{*this}.sendCommand(Command::disableDataReporting);
+  }
+  bool res = Impl{*this}.getStatus(status);
+  if (m_stream) {
+    Impl{*this}.sendCommand(Command::enableDataReporting);
+  }
+  if (res) {
+    settings.rightBtn = status.rightButton;
+    settings.middleBtn = status.middleButton;
+    settings.leftBtn = status.leftButton;
+    settings.remoteMode = status.remoteMode;
+    settings.enable = status.dataReporting;
     settings.scaling = status.scaling;
     settings.resolution = status.resolution;
     settings.sampleRate = status.sampleRate;
@@ -244,7 +304,7 @@ bool Ps2Mouse::readData(Data& data) const {
   Impl impl{*this};
 
   if (m_stream) {
-     if (digitalRead(m_clockPin) != LOW) {
+     if (PS2_READCLOCK != LOW) {
        return false;
      }
   }
@@ -252,9 +312,15 @@ bool Ps2Mouse::readData(Data& data) const {
     return false;
   }
 
-  Packet packet;
-  if (!impl.recvData(packet)) {
-    return false;
+  Packet packet = {0};
+  if (m_wheelMouse) {
+    if (!impl.recvData((byte*)&packet, sizeof(packet))) {
+      return false;
+    }
+  } else {
+    if (!impl.recvData((byte*)&packet, sizeof(packet) - 1)) {
+      return false;
+    }
   }
 
   data.leftButton = packet.leftButton;
@@ -262,5 +328,6 @@ bool Ps2Mouse::readData(Data& data) const {
   data.rightButton = packet.rightButton;
   data.xMovement = (packet.xSign ? -0x100 : 0) | packet.xMovement;
   data.yMovement = (packet.ySign ? -0x100 : 0) | packet.yMovement;
+  data.wheelMovement = m_wheelMouse ? packet.wheelData : 0;
   return true;
 }
