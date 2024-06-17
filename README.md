@@ -52,8 +52,7 @@ Cute Mouse Driver is part of FreeDos project and is free and open source.
 ## Jumper Settings
 
 There are two jumpers, which can be used to set different modes. Currently you
-can choose between 2-button, 3-button, and wheel mouse modes. In the table below, 
-O means open or unset, and X means closed or set.  
+can choose between 2-button, 3-button, and wheel mouse modes. In the table below, O means open or unset, and X means closed or set.  
 
 JP1  |JP2  |Description
 -----|-----|------------------------------

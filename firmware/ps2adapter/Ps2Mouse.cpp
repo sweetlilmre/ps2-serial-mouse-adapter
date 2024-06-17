@@ -225,13 +225,16 @@ bool Ps2Mouse::recvByte(byte& value) const {
     parity ^= nextBit;
   }
 
-  // Receive and check parity bit
-  recvBit(); // TODO check parity
+  // Receive parity bit
+  byte actualParity = recvBit();
+  if (parity != actualParity) {
+    Serial.println("P!");
+  }
 
   // Receive stop bit
   recvBit();
 
-  return true;
+  return parity == actualParity;
 }
 
 bool Ps2Mouse::recvData(byte* data, size_t size) const {
