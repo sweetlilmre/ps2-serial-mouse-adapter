@@ -48,7 +48,7 @@ static void sendToSerial(const Ps2Mouse::Data& data) {
     byte mb;
     if (wheelMouse) {
       // according to: https://sourceforge.net/p/cutemouse/trunk/ci/master/tree/cutemouse/PROTOCOL.TXT
-      // the middle button should be reported in bit 0x10 for a wheel mouse
+      // for a wheel mouse, the middle button should be reported in bit 0x10
       mb = data.middleButton ? 0x10 : 0;
       mb |= (data.wheelMovement & 0x0F);
     } else {
