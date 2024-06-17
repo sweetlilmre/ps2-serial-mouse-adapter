@@ -70,11 +70,12 @@ static void initSerialPort() {
     if(wheelMouse && (mouse.getType() == Ps2Mouse::MouseType::wheelMouse)) {
       // set wheelMouse mode
       sendSerialByte('Z');
+      Serial.println("Init wheel mode");
     } else {
       // set 3-button (Logitech) mode
       sendSerialByte('3');
+      Serial.println("Init 3-button mode");
     }
-    Serial.println(wheelMouse ? "Init Wheel mode" : "Init 3-button mode");
   } else {
     Serial.println("Init 2-button mode");
   }
