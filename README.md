@@ -59,8 +59,8 @@ JP1  |JP2  |Description
 -----|-----|------------------------------
   O  |  O  | 3-button Logitech mouse
   X  |  O  | 2-button Microsoft mouse
-  O  |  X  | Microsoft Wheel Mouse
-  X  |  X  | Undefined
+  O  |  X  | Wheel mouse (cutemouse driver required)
+  X  |  X  | Undefined (2-button mode will override)
 
 ## Bill of materials
 
