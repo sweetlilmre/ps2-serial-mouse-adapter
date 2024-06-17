@@ -5,7 +5,14 @@
 class Ps2Mouse {
 public:
 
+  enum class MouseType {
+
+    threeButton,
+    wheelMouse,
+  };
+
   struct Data {
+
     bool leftButton;
     bool middleButton;
     bool rightButton;
@@ -15,6 +22,7 @@ public:
   };
 
   struct Settings {
+    
     bool rightBtn;
     bool middleBtn;
     bool leftBtn;
@@ -27,21 +35,65 @@ public:
 
   Ps2Mouse();
 
-  bool reset(bool streaming, bool kvmHack);
+  bool reset();
+  bool setReporting(bool enable) const;
+
+  bool setStreamMode();
+  bool setRemoteMode();
 
   bool setScaling(bool flag) const;
   bool setResolution(byte resolution) const;
   bool setSampleRate(byte sampleRate) const;
 
   bool getSettings(Settings& settings) const;
+  Ps2Mouse::MouseType getType() const;
 
-  bool enableStreaming();
-  bool disableStreaming();
   bool readData(Data& data) const;
 
 private:
-  struct Impl;
+  enum class Command {
 
-  bool m_stream;
-  bool m_wheelMouse;
+    disableScaling        = 0xE6,
+    enableScaling         = 0xE7,
+    setResolution         = 0xE8,
+    statusRequest         = 0xE9,
+    setStreamMode         = 0xEA,
+    readData              = 0xEB,
+    resetWrapMode         = 0xEC, // Not implemented
+    setWrapMode           = 0xEE, // Not implemented
+    reset                 = 0xFF,
+    setRemoteMode         = 0xF0,
+    getDeviceId           = 0xF2, // Not implemented
+    setSampleRate         = 0xF3,
+    enableDataReporting   = 0xF4,
+    disableDataReporting  = 0xF5,
+    setDefaults           = 0xF6, // Not implemented
+  };
+
+  struct Status {
+
+    byte rightButton   : 1;
+    byte middleButton  : 1;
+    byte leftButton    : 1;
+    byte na2           : 1;
+    byte scaling       : 1;
+    byte dataReporting : 1;
+    byte remoteMode    : 1;
+    byte na1           : 1;
+
+    byte resolution;
+    byte sampleRate;
+  };
+
+  void sendBit(int value) const;
+  int recvBit() const;
+  bool sendByte(byte value) const;
+  bool recvByte(byte& value) const;
+  bool recvData(byte* data, size_t size) const;
+  bool sendByteWithAck(byte value) const;
+  bool sendCommand(Command command) const;
+  bool sendCommand(Command command, byte setting) const;
+  bool getStatus(Status& status) const;
+
+  MouseType m_type;
 };
