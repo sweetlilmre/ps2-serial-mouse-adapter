@@ -36,27 +36,21 @@ public:
   Ps2Mouse();
 
   bool reset();
-  bool setReporting(bool enable) const;
+  bool setReporting(bool enable);
 
   bool setStreamMode();
   bool setRemoteMode();
 
-  bool setScaling(bool flag) const;
-  bool setResolution(byte resolution) const;
-  bool setSampleRate(byte sampleRate) const;
+  bool setScaling(bool flag);
+  bool setResolution(byte resolution);
+  bool setSampleRate(byte sampleRate);
 
-  bool getSettings(Settings& settings) const;
+  bool getSettings(Settings& settings);
   Ps2Mouse::MouseType getType() const;
 
-  bool readData(Data& data) const;
-  void startInterrupt();
-  void stopInterrupt();
-  bool getByte(uint8_t* data);
-  bool getBytes(uint8_t* data, int length);
-  bool readData2(Data& data);
-  uint8_t getBufferCount() { return m_bufferCount; };
-  uint8_t getBufferHead() { return m_bufferHead; };
-  uint8_t getBufferTail() { return m_bufferTail; };
+  bool readData(Data& data);
+  uint8_t getBufferCount() const { return m_bufferCount; };
+
 private:
   enum class Command {
 
@@ -92,16 +86,18 @@ private:
     byte sampleRate;
   };
 
+  bool getByte(uint8_t& data);
+  bool getBytes(uint8_t* data, size_t size);
+
   void sendBit(int value) const;
-  int recvBit() const;
-  bool sendByte(byte value) const;
-  bool recvByte(byte& value) const;
-  bool recvData(byte* data, size_t size) const;
-  bool sendByteWithAck(byte value) const;
-  bool sendCommand(Command command) const;
-  bool sendCommand(Command command, byte setting) const;
-  bool getStatus(Status& status) const;
+  bool sendByte(byte value);
+  bool sendByteWithAck(byte value);
+  bool sendCommand(Command command);
+  bool sendCommand(Command command, byte setting);
+  bool getStatus(Status& status);
   
+  void startInterrupt();
+  void stopInterrupt();
   static void clockInterruptStatic();
   void interruptHandler();
 
