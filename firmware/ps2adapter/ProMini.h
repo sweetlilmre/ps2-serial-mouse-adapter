@@ -26,27 +26,36 @@
  * more quickly set individual pins to their desired
  * states.
  *PS/2 data pin operations***Bit:76543210************/
-#define PS2_SETDATAHIGH   (PORTC |=0b00001000)
-#define PS2_SETDATALOW    (PORTC &=0b11110111)
-#define PS2_SETDATA(val)  val ? PS2_SETDATAHIGH : PS2_SETDATALOW
-#define PS2_DIRDATAIN     (DDRC  &=0b11110111)
-#define PS2_DIRDATAIN_UP  (DDRC  &=0b11110111); PS2_SETDATAHIGH
-#define PS2_DIRDATAOUT    (DDRC  |=0b00001000)
-#define PS2_READDATA      ((PINC &=0b00001000)>>3)
+ 
+#define PS2_DATA_BIT        (_BV(3))
+#define PS2_SETDATAHIGH()   ( PORTC |= PS2_DATA_BIT )
+#define PS2_SETDATALOW()    ( PORTC &= ~PS2_DATA_BIT )
+#define PS2_SETDATA(val)    (val) ? PS2_SETDATAHIGH() : PS2_SETDATALOW()
+#define PS2_DIRDATAIN()     ( DDRC  &= ~PS2_DATA_BIT )
+#define PS2_DIRDATAIN_UP()  ( DDRC  &= ~PS2_DATA_BIT )
+#define PS2_DIRDATAOUT()    ( DDRC  |= PS2_DATA_BIT )
+#define PS2_READDATA()      ( (PINC &= PS2_DATA_BIT)>>3 )
 
 /*PS/2 clock pin operations**Bit:76543210************/
-#define PS2_SETCLOCKHIGH  (PORTD |=0b00000100)
-#define PS2_SETCLOCKLOW   (PORTD &=0b11111011)
-#define PS2_SETCLOCK(val) val ? PS2_SETCLOCKHIGH : PS2_SETCLOCKLOW
-#define PS2_DIRCLOCKIN    (DDRD  &=0b11111011)
-#define PS2_DIRCLOCKIN_UP (DDRD  &=0b11111011); PS2_SETCLOCKHIGH
-#define PS2_DIRCLOCKOUT   (DDRD  |=0b00000100)
-#define PS2_READCLOCK     ((PIND &=0b00000100)>>2)
+#define PS2_CLOCK_BIT       (_BV(2))
+#define PS2_SETCLOCKHIGH    ( PORTD |= PS2_CLOCK_BIT )
+#define PS2_SETCLOCKLOW     ( PORTD &= ~PS2_CLOCK_BIT)
+#define PS2_SETCLOCK(val)   (val) ? PS2_SETCLOCKHIGH : PS2_SETCLOCKLOW
+#define PS2_DIRCLOCKIN      ( DDRD  &= ~PS2_CLOCK_BIT )
+#define PS2_DIRCLOCKIN_UP   ( DDRD  &= ~PS2_CLOCK_BIT ); PS2_SETCLOCKHIGH
+#define PS2_DIRCLOCKOUT     ( DDRD  |= PS2_CLOCK_BIT )
+#define PS2_READCLOCK       ( (PIND &= PS2_CLOCK_BIT)>>2 )
+
+#define PS2_CLOCK_INT_CLEAR()       ( EIFR = PS2_CLOCK_INT )
+#define PS2_CLOCK_INT_ENABLE()      ( EIMSK |= _BV(INT0) )
+#define PS2_CLOCK_INT_DISABLE()     ( EIMSK &= ~_BV(INT0) )
+#define PS2_CLOCK_INT_FALLING()     ( EICRA = (EICRA & ~_BV(ISC00)) | _BV(ISC01) )
+#define PS2_CLOCK_INT_CHANGE()      ( EICRA = (EICRA & ~_BV(ISC01)) | _BV(ISC00) )
 
 /*RS-232 pin operations******Bit:76543210************/  
 #define RS_SETTXHIGH      (PORTD |=0b00010000)
 #define RS_SETTXLOW       (PORTD &=0b11101111)
-#define RS_SETTX(val)     val ? RS_SETTXHIGH : RS_SETTXLOW
+#define RS_SETTX(val)     (val) ? RS_SETTXHIGH : RS_SETTXLOW
 #define RS_DIRTXOUT       (DDRD  |=0b00010000)
 /****************************************************/
 
@@ -63,8 +72,8 @@
 /****************************************************/
 
 /*LED pin operations*********Bit:76543210************/
-#define LED_SETHIGH       (PORTB |=0b00100000)
-#define LED_SETLOW        (PORTB &=0b11011111)
-#define LED_SET(val)      val ? LED_SETHIGH : LED_SETLOW
-#define LED_DIROUT        (DDRB  |=0b00100000)
+#define LED_SETHIGH()     (PORTB |=0b00100000)
+#define LED_SETLOW()      (PORTB &=0b11011111)
+#define LED_SET(val)      (val) ? LED_SETHIGH() : LED_SETLOW()
+#define LED_DIROUT()      (DDRB  |=0b00100000)
 /****************************************************/

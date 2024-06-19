@@ -1,12 +1,13 @@
 #include "ProMini.h"
 #include "Ps2Mouse.h"
+#include "Blinker.h"
 
 static const int RS232_RTS = 3;
 
 static Ps2Mouse mouse;
 static bool twoButtons = false;
 static bool wheelMouse = false;
-static volatile bool doSerialInit = false;
+static volatile bool doSerialInit = true;
 static volatile bool serialInitDone = false;
 
 static void sendSerialBit(int data) {
@@ -127,12 +128,12 @@ void resetSerialSignal() {
 void setup() {
   // PS/2 Data input must be initialized shortly after power on,
   // or the mouse will not initialize
-  PS2_DIRDATAIN_UP;
+  PS2_DIRDATAIN_UP();
   RS_DIRTXOUT;
   JP12_DIRIN_UP;
   JP34_DIRIN_UP;
-  LED_DIROUT;
-  LED_SET(HIGH);
+  LED_DIROUT();
+  LED_SETHIGH();
 
   Serial.begin(115200);
   twoButtons = (JP12_READ == LOW);
@@ -146,17 +147,100 @@ void setup() {
   attachInterrupt(digitalPinToInterrupt(RS232_RTS), resetSerialSignal, FALLING);
 
   Serial.println("Setup done!");
-  LED_SETLOW;
+  mouse.startInterrupt();
+  LED_SETLOW();
 }
 
+enum class SettingState {
+  ProcessMouse,
+  SettingEnterDetected,
+  SettingStateConfirmed,
+
+
+};
+
+void blinkNtimes(int n, unsigned long ms = 100) {
+  for (int i = 0; i < n; i++) {
+    LED_SET(HIGH);
+    delay(ms);
+    LED_SET(LOW);
+    delay(ms);
+  }
+}
+
+Blinker blinker;
+
+static SettingState settingState = SettingState::ProcessMouse;
+static unsigned long lastMillis = 0;
+
+void processStateMachine() {
+
+  Ps2Mouse::Data data;
+  bool validData = mouse.readData2(data);
+  blinker.update();
+
+  switch (settingState) {
+    case SettingState::ProcessMouse:
+      if (!validData) {
+        return;
+      }
+      Serial.println("PM");
+      if (data.leftButton && data.rightButton && data.middleButton) {
+        settingState = SettingState::SettingEnterDetected;
+        lastMillis = millis();
+      } else {
+        sendToSerial(data);
+      }
+      break;
+    case SettingState::SettingEnterDetected:
+      Serial.println("SED");
+      if (validData && !(data.leftButton && data.rightButton && data.middleButton)) {
+        settingState = SettingState::ProcessMouse;
+        return;
+      }
+      if (millis() - lastMillis > 3000) {
+        settingState = SettingState::SettingStateConfirmed;
+        lastMillis = millis();
+        blinker.enable();
+      }
+      break;
+    case SettingState::SettingStateConfirmed:
+      Serial.println("SSC");
+      if (!validData) {
+        return;
+      }
+      
+      if (millis() - lastMillis > 1000) {
+        // left handed mode selected
+        if (data.rightButton && !data.leftButton && !data.middleButton) {
+          settingState = SettingState::ProcessMouse;
+          blinker.disable();
+        }
+      }
+      break;
+  }
+}
 
 void loop() {
   if (doSerialInit) {
     initSerialPort();
     doSerialInit = false;
   }
-  Ps2Mouse::Data data;
-  if (serialInitDone && mouse.readData(data)) {
-    sendToSerial(data);
+  if (serialInitDone) {
+    //processStateMachine();
+    //return;
+    Ps2Mouse::Data data;
+    mouse.readData2(data);
+    Serial.println("count = " + String(mouse.getBufferCount()));
+    Serial.println("head = " + String(mouse.getBufferHead()));
+    Serial.println("tail = " + String(mouse.getBufferTail()));
+
+    Serial.print("LB = "); Serial.println(data.leftButton);
+    Serial.print("MB = "); Serial.println(data.middleButton);
+    Serial.print("RB = "); Serial.println(data.rightButton);
+    Serial.print("X = "); Serial.println(data.xMovement);
+    Serial.print("Y = "); Serial.println(data.yMovement);
+    Serial.print("W = "); Serial.println(data.wheelMovement);
+
   }
 }

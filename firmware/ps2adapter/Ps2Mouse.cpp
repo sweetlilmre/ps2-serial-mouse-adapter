@@ -32,10 +32,13 @@ enum class Response {
 
 } // namespace
 
+static Ps2Mouse* classPtr = NULL;
 
 Ps2Mouse::Ps2Mouse()
   : m_type(MouseType::threeButton)
-{}
+{
+  classPtr = this;
+}
 
 bool Ps2Mouse::reset() {
   
@@ -159,6 +162,121 @@ bool Ps2Mouse::readData(Data& data) const {
   return true;
 }
 
+void Ps2Mouse::clockInterruptStatic() {
+
+  if (classPtr != NULL) {
+    classPtr->interruptHandler();
+  }
+}
+
+void Ps2Mouse::startInterrupt() {
+
+  // Enter receive mode
+  PS2_DIRCLOCKIN;
+  PS2_DIRDATAIN();
+  m_mouseBits = 0;
+  m_bitCount = 0;
+  m_bufferHead = m_bufferTail = m_bufferCount = 0;
+  memset(m_buffer, 0, 256);
+  attachInterrupt(0, clockInterruptStatic, FALLING);
+}
+
+void Ps2Mouse::stopInterrupt() {
+
+  detachInterrupt(0);
+}
+
+bool Ps2Mouse::getByte(uint8_t* data) {
+
+  if (m_bufferHead == m_bufferTail) {
+    return false;
+  }
+  m_bufferCount--;
+  *data = m_buffer[m_bufferTail++];
+  return true;
+}
+
+bool Ps2Mouse::getBytes(uint8_t* data, int length) {
+
+  while (length) {
+    if (getByte(data)) {
+      data++;
+      length--;
+    }
+  }
+  return true;
+}
+
+bool Ps2Mouse::readData2(Data& data) {
+
+  Packet packet = {0};
+  if (m_type == MouseType::wheelMouse) {
+    if (!getBytes((byte*)&packet, sizeof(packet))) {
+      return false;
+    }
+  } else {
+    if (!getBytes((byte*)&packet, sizeof(packet) - 1)) {
+      return false;
+    }
+  }
+
+  data.leftButton = packet.leftButton;
+  data.middleButton = packet.middleButton;
+  data.rightButton = packet.rightButton;
+  data.xMovement = (packet.xSign ? -0x100 : 0) | packet.xMovement;
+  data.yMovement = (packet.ySign ? -0x100 : 0) | packet.yMovement;
+  data.wheelMovement = (m_type == MouseType::wheelMouse) ? packet.wheelData : 0;
+  return true;
+}
+
+
+void Ps2Mouse::interruptHandler() {
+  
+  uint8_t bit = PS2_READDATA();
+
+  if (m_bitCount == 0) {
+    // start bit should ALWAYS be 0
+    if (bit) {
+      LED_SETHIGH();
+      // error on start bit
+      return;
+    }
+    // start bit: bit 1
+    m_parityBit = 1;
+    m_mouseBits = 0;
+    m_bitCount++;
+  } else if ((m_bitCount > 0) && (m_bitCount < 9)) {
+    // data bits: bits 2 - 9
+    m_mouseBits >>= 1;
+    m_mouseBits |= (bit << 7);
+    m_parityBit ^= bit;
+    m_bitCount++;
+  } else if (m_bitCount == 9) {
+    // parity bit: bit 10
+    // parity bit should match the calculated parity
+    // so m_parityBit xor bit will be 0 if parity matches:
+    // 1 ^ 1 = 0
+    // 0 ^ 0 = 0
+    // 1 ^ 0 = 1
+    // 0 ^ 1 = 1
+    m_parityBit ^= bit;
+    m_bitCount++;
+  } else {
+    // stop bit: bit 11
+    // if stop bit is 1 and parity 0, then add this byte to the buffer
+    if (bit && !m_parityBit) {
+      m_buffer[m_bufferHead] = m_mouseBits;
+      m_bufferCount++;
+      m_bufferHead++;
+      m_bitCount++;
+      LED_SETLOW();
+    } else {
+      LED_SETHIGH();
+    }
+    m_bitCount = 0;
+  }
+}
+
 void Ps2Mouse::sendBit(int value) const {
   
   while (PS2_READCLOCK != LOW) {}
@@ -174,8 +292,8 @@ bool Ps2Mouse::sendByte(byte value) const {
   delayMicroseconds(10);
 
   // Set start bit and release the clock
-  PS2_DIRDATAOUT;
-  PS2_SETDATALOW;
+  PS2_DIRDATAOUT();
+  PS2_SETDATALOW();
   PS2_DIRCLOCKIN_UP;
 
   // Send data bits
@@ -193,23 +311,24 @@ bool Ps2Mouse::sendByte(byte value) const {
   sendBit(1);
 
   // Enter receive mode and wait for ACK bit
-  PS2_DIRDATAIN;
+  PS2_DIRDATAIN();
   return recvBit() == 0;
 }
 
 int Ps2Mouse::recvBit() const {
 
   while (PS2_READCLOCK != LOW) {}
-  auto result = PS2_READDATA;
+  auto result = PS2_READDATA();
   while (PS2_READCLOCK != HIGH) {}
   return result;
 }
+
 
 bool Ps2Mouse::recvByte(byte& value) const {
 
   // Enter receive mode
   PS2_DIRCLOCKIN;
-  PS2_DIRDATAIN;
+  PS2_DIRDATAIN();
 
   // Receive start bit
   if (recvBit() != 0) {
@@ -227,13 +346,13 @@ bool Ps2Mouse::recvByte(byte& value) const {
 
   // Receive parity bit
   byte actualParity = recvBit();
-  if (parity != actualParity) {
-    Serial.println("P!");
-  }
 
   // Receive stop bit
   recvBit();
 
+  if (parity != actualParity) {
+    Serial.println("P!");
+  }
   return parity == actualParity;
 }
 

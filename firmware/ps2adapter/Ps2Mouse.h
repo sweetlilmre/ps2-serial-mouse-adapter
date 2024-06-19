@@ -49,7 +49,14 @@ public:
   Ps2Mouse::MouseType getType() const;
 
   bool readData(Data& data) const;
-
+  void startInterrupt();
+  void stopInterrupt();
+  bool getByte(uint8_t* data);
+  bool getBytes(uint8_t* data, int length);
+  bool readData2(Data& data);
+  uint8_t getBufferCount() { return m_bufferCount; };
+  uint8_t getBufferHead() { return m_bufferHead; };
+  uint8_t getBufferTail() { return m_bufferTail; };
 private:
   enum class Command {
 
@@ -94,6 +101,14 @@ private:
   bool sendCommand(Command command) const;
   bool sendCommand(Command command, byte setting) const;
   bool getStatus(Status& status) const;
+  
+  static void clockInterruptStatic();
+  void interruptHandler();
 
   MouseType m_type;
+  uint8_t m_mouseBits;
+  uint8_t m_bitCount;
+  uint8_t m_parityBit;
+  volatile uint8_t m_bufferTail, m_bufferHead, m_bufferCount;
+  uint8_t m_buffer[256];
 };
