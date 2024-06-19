@@ -182,8 +182,11 @@ void Ps2Mouse::startInterrupt() {
 }
 
 void Ps2Mouse::stopInterrupt() {
-
   detachInterrupt(0);
+  m_mouseBits = 0;
+  m_bitCount = 0;
+  m_bufferHead = m_bufferTail = m_bufferCount = 0;
+  memset(m_buffer, 0, 256);
 }
 
 bool Ps2Mouse::getByte(uint8_t* data) {
@@ -277,44 +280,6 @@ void Ps2Mouse::interruptHandler() {
   }
 }
 
-void Ps2Mouse::sendBit(int value) const {
-  
-  while (PS2_READCLOCK != LOW) {}
-  PS2_SETDATA(value);
-  while (PS2_READCLOCK != HIGH) {}
-}
-
-bool Ps2Mouse::sendByte(byte value) const {
-
-  // Inhibit communication
-  PS2_DIRCLOCKOUT;
-  PS2_SETCLOCKLOW;
-  delayMicroseconds(10);
-
-  // Set start bit and release the clock
-  PS2_DIRDATAOUT();
-  PS2_SETDATALOW();
-  PS2_DIRCLOCKIN_UP;
-
-  // Send data bits
-  byte parity = 1;
-  for (auto i = 0; i < 8; i++) {
-    byte nextBit = (value >> i) & 0x01;
-    parity ^= nextBit;
-    sendBit(nextBit);
-  }
-
-  // Send parity bit
-  sendBit(parity);
-
-  // Send stop bit
-  sendBit(1);
-
-  // Enter receive mode and wait for ACK bit
-  PS2_DIRDATAIN();
-  return recvBit() == 0;
-}
-
 int Ps2Mouse::recvBit() const {
 
   while (PS2_READCLOCK != LOW) {}
@@ -363,6 +328,44 @@ bool Ps2Mouse::recvData(byte* data, size_t size) const {
     }
   }
   return true;
+}
+
+void Ps2Mouse::sendBit(int value) const {
+  
+  while (PS2_READCLOCK != LOW) {}
+  PS2_SETDATA(value);
+  while (PS2_READCLOCK != HIGH) {}
+}
+
+bool Ps2Mouse::sendByte(byte value) const {
+
+  // Inhibit communication
+  PS2_DIRCLOCKOUT;
+  PS2_SETCLOCKLOW;
+  delayMicroseconds(10);
+
+  // Set start bit and release the clock
+  PS2_DIRDATAOUT();
+  PS2_SETDATALOW();
+  PS2_DIRCLOCKIN_UP;
+
+  // Send data bits
+  byte parity = 1;
+  for (auto i = 0; i < 8; i++) {
+    byte nextBit = (value >> i) & 0x01;
+    parity ^= nextBit;
+    sendBit(nextBit);
+  }
+
+  // Send parity bit
+  sendBit(parity);
+
+  // Send stop bit
+  sendBit(1);
+
+  // Enter receive mode and wait for ACK bit
+  PS2_DIRDATAIN();
+  return recvBit() == 0;
 }
 
 bool Ps2Mouse::sendByteWithAck(byte value) const {
