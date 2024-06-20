@@ -33,10 +33,25 @@ enum class Response {
 
 static Ps2Mouse* classPtr = NULL;
 
+Ps2Mouse* Ps2Mouse::instance() {
+
+  if (classPtr == NULL) {
+    classPtr = new Ps2Mouse();
+  }
+  return classPtr;
+}
+
 Ps2Mouse::Ps2Mouse()
-  : m_type(MouseType::threeButton)
 {
-  classPtr = this;
+ 
+  m_type = MouseType::threeButton;
+  m_mouseBits = 0;
+  m_bitCount = 0;
+  m_parityBit = 0;
+  m_bufferTail = 0;
+  m_bufferHead = 0;
+  m_bufferCount = 0;
+  memset(m_buffer, 0, 256);
 }
 
 bool Ps2Mouse::reset() {

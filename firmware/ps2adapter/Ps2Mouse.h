@@ -33,7 +33,7 @@ public:
     byte sampleRate;
   };
 
-  Ps2Mouse();
+  static Ps2Mouse* instance();
 
   bool reset();
   bool setReporting(bool enable);
@@ -85,6 +85,8 @@ private:
     byte resolution;
     byte sampleRate;
   };
+
+  Ps2Mouse();
 
   bool getByte(uint8_t& data);
   bool getBytes(uint8_t* data, size_t size);

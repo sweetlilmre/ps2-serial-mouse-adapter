@@ -2,7 +2,13 @@
 #include "Blinker.h"
 #include "ProMini.h"
 
-Blinker::Blinker() : _ms(500), _lastMark(0), _state(false), _enabled(false), _count(0) {}
+Blinker::Blinker() {
+  _ms = 500;
+  _lastMark =0;
+  _state = false;
+  _enabled = false;
+  _count = 0;
+}
 
 void Blinker::message(unsigned long ms, int count) {
   _count = count << 1;
