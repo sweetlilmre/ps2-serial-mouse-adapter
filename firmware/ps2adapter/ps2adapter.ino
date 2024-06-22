@@ -1,6 +1,6 @@
 #include "ProMini.h"
 #include "Ps2Mouse.h"
-#include "Blinker.h"
+#include "LEDMessenger.h"
 
 static const int RS232_RTS = 3;
 
@@ -127,6 +127,8 @@ void resetSerialSignal() {
   doSerialInit = true;
 }
 
+LEDMessenger blinker;
+
 void setup() {
   // PS/2 Data input must be initialized shortly after power on,
   // or the mouse will not initialize
@@ -138,6 +140,8 @@ void setup() {
   LED_SETHIGH();
 
   Serial.begin(115200);
+  blinker.start();
+
   twoButtons = (JP12_READ() == LOW);
   wheelMouse = (JP34_READ() == LOW);
   pMouse = Ps2Mouse::instance();
@@ -157,56 +161,61 @@ enum class SettingState {
   ProcessMouse,
   SettingEnterDetected,
   SettingStateConfirmed,
-
 };
 
-Blinker blinker;
 
 static SettingState settingState = SettingState::ProcessMouse;
 static unsigned long lastMillis = 0;
+static bool swapButtons = false;
 
 void processStateMachine() {
 
   Ps2Mouse::Data data;
   bool validData = pMouse->readData(data);
-  blinker.update();
 
   switch (settingState) {
     case SettingState::ProcessMouse:
       if (!validData) {
         return;
       }
-      Serial.println("PM");
       if (data.leftButton && data.rightButton && data.middleButton) {
         settingState = SettingState::SettingEnterDetected;
         lastMillis = millis();
+        blinker.push(500, -1, 500);
       } else {
+        if (swapButtons) {
+          bool tmp = data.leftButton;
+          data.leftButton = data.rightButton;
+          data.rightButton = tmp;
+        }
+        Serial.println("L: " + String(data.leftButton) + " M: " + String(data.middleButton) + " R: " + String(data.rightButton) + " X: " + String(data.xMovement) + " Y: " + String(data.yMovement) + " W: " + String(data.wheelMovement));
         sendToSerial(data);
       }
       break;
     case SettingState::SettingEnterDetected:
-      Serial.println("SED");
       if (validData && !(data.leftButton && data.rightButton && data.middleButton)) {
         settingState = SettingState::ProcessMouse;
+        blinker.push(0, 0, 200);
         return;
       }
       if (millis() - lastMillis > 3000) {
         settingState = SettingState::SettingStateConfirmed;
         lastMillis = millis();
-        blinker.enable(500);
+        blinker.push(300, -1, 500);
       }
       break;
     case SettingState::SettingStateConfirmed:
-      Serial.println("SSC");
       if (!validData) {
         return;
       }
       
       if (millis() - lastMillis > 1000) {
-        // left handed mode selected
+        // button swap mode selected
         if (data.rightButton && !data.leftButton && !data.middleButton) {
+          swapButtons = !swapButtons;
+          Serial.println("Button Swap: " + String(swapButtons));
           settingState = SettingState::ProcessMouse;
-          blinker.message(200, 3);
+          blinker.push(200, 3, 1000);
         }
       }
       break;
