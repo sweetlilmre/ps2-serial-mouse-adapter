@@ -1,12 +1,13 @@
 #include "ProMini.h"
 #include "Ps2Mouse.h"
+#include "LEDMessenger.h"
 
 static const int RS232_RTS = 3;
 
-static Ps2Mouse mouse;
+static Ps2Mouse* pMouse;
 static bool twoButtons = false;
 static bool wheelMouse = false;
-static volatile bool doSerialInit = false;
+static volatile bool doSerialInit = true;
 static volatile bool serialInitDone = false;
 
 static void sendSerialBit(int data) {
@@ -61,13 +62,16 @@ static void sendToSerial(const Ps2Mouse::Data& data) {
 
 static void initSerialPort() {
 
+  // disable the PS/2 mouse data reporting while the serial port is being initialized
+  pMouse->setReporting(false);
+
   Serial.println("Starting serial port");
-  RS_SETTXHIGH;
+  RS_SETTXHIGH();
   delayMicroseconds(10000);
   sendSerialByte('M');
   if(!twoButtons) {
     // if wheelMouse mode has been set by jumper, confirm that the mouse has the capability
-    if(wheelMouse && (mouse.getType() == Ps2Mouse::MouseType::wheelMouse)) {
+    if(wheelMouse && (pMouse->getType() == Ps2Mouse::MouseType::wheelMouse)) {
       // set wheelMouse mode
       sendSerialByte('Z');
       Serial.println("Init wheel mode");
@@ -81,29 +85,29 @@ static void initSerialPort() {
   }
   delayMicroseconds(10000);
   // Renable PS/2 mouse data reporting
-  mouse.setReporting(true);
+  pMouse->setReporting(true);
   // Signal the main loop that the serial port is ready
   serialInitDone = true;
 }
 
 static void initPs2Port() {
 
-  Serial.println("Reseting PS/2 mouse");
+  Serial.print("Reseting PS/2 mouse... ");
   
-  if (mouse.reset()) {
-    Serial.println("PS/2 mouse reset OK");
+  if (pMouse->reset()) {
+    Serial.println("OK");
   } else {
-    Serial.println("Failed to reset PS/2 mouse");
+    Serial.println("Failed!");
   }
 
-  if (mouse.setSampleRate(20)) {
+  if (pMouse->setSampleRate(20)) {
     Serial.println("Sample rate set to 20");
   } else {
     Serial.println("Failed to set sample rate");
   }
 
   Ps2Mouse::Settings settings;
-  if (mouse.getSettings(settings)) {
+  if (pMouse->getSettings(settings)) {
     Serial.print("scaling = ");
     Serial.println(settings.scaling);
     Serial.print("resolution = ");
@@ -116,47 +120,115 @@ static void initPs2Port() {
 }
 
 void resetSerialSignal() {
+
   // signal the main loop to ignore the PS/2 mouse data until the serial port is ready
   serialInitDone = false;
-  // disable the PS/2 mouse data reporting while the serial port is being initialized
-  mouse.setReporting(false);
   // signal the main loop to initialize the serial port
   doSerialInit = true;
 }
 
+LEDMessenger blinker;
+
 void setup() {
   // PS/2 Data input must be initialized shortly after power on,
   // or the mouse will not initialize
-  PS2_DIRDATAIN_UP;
-  RS_DIRTXOUT;
-  JP12_DIRIN_UP;
-  JP34_DIRIN_UP;
-  LED_DIROUT;
-  LED_SET(HIGH);
+  PS2_DIRDATAIN_UP();
+  RS_DIRTXOUT();
+  JP12_DIRIN_UP();
+  JP34_DIRIN_UP();
+  LED_DIROUT();
+  LED_SETHIGH();
 
   Serial.begin(115200);
-  twoButtons = (JP12_READ == LOW);
-  wheelMouse = (JP34_READ == LOW);
+  blinker.start();
+
+  twoButtons = (JP12_READ() == LOW);
+  wheelMouse = (JP34_READ() == LOW);
+  pMouse = Ps2Mouse::instance();
 
   // PS/2 initialization can take > 400ms for reset to complete.
-  // Init the mouse here, determine it's characteristics and then
+  // Init the mouse here, determine its characteristics and then
   // wait for the RTS signal to initialize the serial port comms
   initPs2Port();
   Serial.println("Listening on RTS");
   attachInterrupt(digitalPinToInterrupt(RS232_RTS), resetSerialSignal, FALLING);
 
   Serial.println("Setup done!");
-  LED_SETLOW;
+  LED_SETLOW();
 }
 
+enum class SettingState {
+  ProcessMouse,
+  SettingEnterDetected,
+  SettingStateConfirmed,
+};
+
+
+static SettingState settingState = SettingState::ProcessMouse;
+static unsigned long lastMillis = 0;
+static bool swapButtons = false;
+
+void processStateMachine() {
+
+  Ps2Mouse::Data data;
+  bool validData = pMouse->readData(data);
+
+  switch (settingState) {
+    case SettingState::ProcessMouse:
+      if (!validData) {
+        return;
+      }
+      if (data.leftButton && data.rightButton && data.middleButton) {
+        settingState = SettingState::SettingEnterDetected;
+        lastMillis = millis();
+        blinker.push(500, -1, 500);
+      } else {
+        if (swapButtons) {
+          bool tmp = data.leftButton;
+          data.leftButton = data.rightButton;
+          data.rightButton = tmp;
+        }
+        Serial.println("L: " + String(data.leftButton) + " M: " + String(data.middleButton) + " R: " + String(data.rightButton) + " X: " + String(data.xMovement) + " Y: " + String(data.yMovement) + " W: " + String(data.wheelMovement));
+        sendToSerial(data);
+      }
+      break;
+    case SettingState::SettingEnterDetected:
+      if (validData && !(data.leftButton && data.rightButton && data.middleButton)) {
+        settingState = SettingState::ProcessMouse;
+        blinker.push(0, 0, 200);
+        return;
+      }
+      if (millis() - lastMillis > 3000) {
+        settingState = SettingState::SettingStateConfirmed;
+        lastMillis = millis();
+        blinker.push(300, -1, 500);
+      }
+      break;
+    case SettingState::SettingStateConfirmed:
+      if (!validData) {
+        return;
+      }
+      
+      if (millis() - lastMillis > 1000) {
+        // button swap mode selected
+        if (data.rightButton && !data.leftButton && !data.middleButton) {
+          swapButtons = !swapButtons;
+          Serial.println("Button Swap: " + String(swapButtons));
+          settingState = SettingState::ProcessMouse;
+          blinker.push(200, 3, 1000);
+        }
+      }
+      break;
+  }
+}
 
 void loop() {
   if (doSerialInit) {
     initSerialPort();
     doSerialInit = false;
   }
-  Ps2Mouse::Data data;
-  if (serialInitDone && mouse.readData(data)) {
-    sendToSerial(data);
+
+  if (serialInitDone) {
+    processStateMachine();
   }
 }
