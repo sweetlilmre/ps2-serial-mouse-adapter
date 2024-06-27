@@ -147,7 +147,7 @@ void setup() {
   pMouse = Ps2Mouse::instance();
 
   // PS/2 initialization can take > 400ms for reset to complete.
-  // Init the mouse here, determine it's characteristics and then
+  // Init the mouse here, determine its characteristics and then
   // wait for the RTS signal to initialize the serial port comms
   initPs2Port();
   Serial.println("Listening on RTS");
