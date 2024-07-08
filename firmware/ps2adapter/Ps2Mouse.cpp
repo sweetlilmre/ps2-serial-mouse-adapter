@@ -43,8 +43,10 @@ Ps2Mouse* Ps2Mouse::instance() {
 
 Ps2Mouse::Ps2Mouse()
 {
- 
-  m_type = MouseType::threeButton;
+  // PS/2 Data input must be initialized shortly after power on,
+  // or the mouse will not initialize
+  PS2_DIRDATAIN_UP();
+  m_type = mouseType_t::threeButton;
   m_mouseBits = 0;
   m_bitCount = 0;
   m_parityBit = 0;
@@ -52,6 +54,39 @@ Ps2Mouse::Ps2Mouse()
   m_bufferHead = 0;
   m_bufferCount = 0;
   memset(m_buffer, 0, 256);
+}
+
+bool Ps2Mouse::init() {
+
+  Serial.print("Reseting PS/2 mouse... ");
+  
+  if (reset()) {
+    Serial.println("OK");
+  } else {
+    Serial.println("Failed!");
+    return false;
+  }
+
+  if (setSampleRate(20)) {
+    Serial.println("Sample rate set to 20");
+  } else {
+    Serial.println("Failed to set sample rate");
+    return false;
+  }
+
+  Ps2Settings_t settings;
+  if (getSettings(settings)) {
+    Serial.print("scaling = ");
+    Serial.println(settings.scaling);
+    Serial.print("resolution = ");
+    Serial.println(settings.resolution);
+    Serial.print("samplingRate = ");
+    Serial.println(settings.sampleRate);
+  } else {
+    Serial.println("Failed to get settings");
+    return false;
+  }
+  return true;
 }
 
 bool Ps2Mouse::reset() {
@@ -80,7 +115,7 @@ bool Ps2Mouse::reset() {
   }
 
   if (reply == byte(Response::isWheelMouse)) {
-    m_type = MouseType::wheelMouse;
+    m_type = mouseType_t::wheelMouse;
   }
 
   // switch on data reporting
@@ -126,16 +161,14 @@ bool Ps2Mouse::setSampleRate(byte sampleRate) {
   return res;
 }
 
-bool Ps2Mouse::getSettings(Settings& settings) {
+bool Ps2Mouse::getSettings(Ps2Settings_t& settings) {
   
   Status status;
   setReporting(false);
   bool res = getStatus(status);
   setReporting(true);
   if (res) {
-    settings.rightBtn = status.rightButton;
-    settings.middleBtn = status.middleButton;
-    settings.leftBtn = status.leftButton;
+    settings.buttons = (status.middleButton << MB_MIDDLE_BITPOS) | (status.rightButton << MB_RIGHT_BITPOS) | (status.leftButton << MB_LEFT_BITPOS);
     settings.remoteMode = status.remoteMode;
     settings.enable = status.dataReporting;
     settings.scaling = status.scaling;
@@ -146,7 +179,7 @@ bool Ps2Mouse::getSettings(Settings& settings) {
   return false;
 }
 
-Ps2Mouse::MouseType Ps2Mouse::getType() const {
+mouseType_t Ps2Mouse::getType() const {
   return m_type;
 }
 
@@ -178,10 +211,10 @@ void Ps2Mouse::stopInterrupt() {
 }
 
 
-bool Ps2Mouse::readData(Data& data) {
+bool Ps2Mouse::readData(Ps2Report_t& data) {
 
   size_t pktSize = sizeof(Packet);
-  if (m_type != MouseType::wheelMouse) {
+  if (m_type != mouseType_t::wheelMouse) {
     pktSize--;
   }
 
@@ -190,22 +223,20 @@ bool Ps2Mouse::readData(Data& data) {
   }
 
   Packet packet = {0};
-  if (m_type == MouseType::wheelMouse) {
-    if (!getBytes((byte*)&packet, sizeof(packet))) {
+  if (m_type == mouseType_t::wheelMouse) {
+    if (!getBytes(reinterpret_cast<uint8_t*>(&packet), sizeof(packet))) {
       return false;
     }
   } else {
-    if (!getBytes((byte*)&packet, sizeof(packet) - 1)) {
+    if (!getBytes(reinterpret_cast<uint8_t*>(&packet), sizeof(packet) - 1)) {
       return false;
     }
   }
 
-  data.leftButton = packet.leftButton;
-  data.middleButton = packet.middleButton;
-  data.rightButton = packet.rightButton;
-  data.xMovement = (packet.xSign ? -0x100 : 0) | packet.xMovement;
-  data.yMovement = (packet.ySign ? -0x100 : 0) | packet.yMovement;
-  data.wheelMovement = (m_type == MouseType::wheelMouse) ? packet.wheelData : 0;
+  data.buttons = (packet.middleButton ? MB_MIDDLE : 0) | (packet.rightButton ? MB_RIGHT : 0) | (packet.leftButton ? MB_LEFT : 0);
+  data.x = (packet.xSign ? -0x100 : 0) | packet.xMovement;
+  data.y = (packet.ySign ? -0x100 : 0) | packet.yMovement;
+  data.wheel = (m_type == mouseType_t::wheelMouse) ? packet.wheelData : 0;
   return true;
 }
 
@@ -225,7 +256,7 @@ void Ps2Mouse::interruptHandler() {
     m_parityBit = 1;
     m_mouseBits = 0;
     m_bitCount++;
-  } else if ((m_bitCount > 0) && (m_bitCount < 9)) {
+  } else if (m_bitCount < 9) {
     // data bits: bits 2 - 9
     m_mouseBits >>= 1;
     m_mouseBits |= (bit << 7);
@@ -248,7 +279,6 @@ void Ps2Mouse::interruptHandler() {
       m_buffer[m_bufferHead] = m_mouseBits;
       m_bufferCount++;
       m_bufferHead++;
-      m_bitCount++;
       //LED_SETLOW();
     } else {
       // LED_SETHIGH();
@@ -347,5 +377,5 @@ bool Ps2Mouse::sendCommand(Command command, byte setting) {
 }
 
 bool Ps2Mouse::getStatus(Status& status) {
-  return sendCommand(Command::statusRequest) && getBytes((byte*) &status, sizeof(Status));
+  return sendCommand(Command::statusRequest) && getBytes(reinterpret_cast<uint8_t*>(&status), sizeof(Status));
 }

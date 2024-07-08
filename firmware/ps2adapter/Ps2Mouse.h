@@ -1,40 +1,14 @@
 #pragma once
 
 #include <Arduino.h>
+#include "MouseData.h"
 
 class Ps2Mouse {
+
 public:
-
-  enum class MouseType {
-
-    threeButton,
-    wheelMouse,
-  };
-
-  struct Data {
-
-    bool leftButton;
-    bool middleButton;
-    bool rightButton;
-    int  xMovement;
-    int  yMovement;
-    int  wheelMovement;
-  };
-
-  struct Settings {
-    
-    bool rightBtn;
-    bool middleBtn;
-    bool leftBtn;
-    bool scaling;
-    bool enable;
-    bool remoteMode;
-    byte resolution;
-    byte sampleRate;
-  };
-
   static Ps2Mouse* instance();
 
+  bool init();
   bool reset();
   bool setReporting(bool enable);
 
@@ -45,10 +19,10 @@ public:
   bool setResolution(byte resolution);
   bool setSampleRate(byte sampleRate);
 
-  bool getSettings(Settings& settings);
-  Ps2Mouse::MouseType getType() const;
+  bool getSettings(Ps2Settings_t& settings);
+  mouseType_t getType() const;
 
-  bool readData(Data& data);
+  bool readData(Ps2Report_t& data);
   uint8_t getBufferCount() const { return m_bufferCount; };
 
 private:
@@ -103,7 +77,7 @@ private:
   static void clockInterruptStatic();
   void interruptHandler();
 
-  MouseType m_type;
+  mouseType_t m_type;
   uint8_t m_mouseBits;
   uint8_t m_bitCount;
   uint8_t m_parityBit;

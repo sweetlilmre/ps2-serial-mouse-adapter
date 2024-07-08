@@ -88,7 +88,7 @@ int LEDMessenger::size() {
 
 void LEDMessenger::update() {
   if (m_nextMessageDelay > 0) {
-    m_nextMessageDelay -= m_nextMessageDelay;
+    m_nextMessageDelay -= m_timerResolution;
     return;
   }
 
@@ -102,19 +102,19 @@ void LEDMessenger::update() {
       pItem->state = HIGH - pItem->state;
       // one full HIGH -> LOW -> HIGH transistion
       if (pItem->state == HIGH) {
-        // continous blink
+        // if continous blink
         if (pItem->repeat < 0) {
-          // waiting message
+          // waiting message will interrupt continuous blink
           if (size() > 1) {
             m_nextMessageDelay = pItem->nextMessageDelay;
             pop();
           }
-          return;
-        }
-        pItem->repeat--;
-        if (pItem->repeat <= 0) {
-          m_nextMessageDelay = pItem->nextMessageDelay;
-          pop();
+        } else {
+          pItem->repeat--;
+          if (pItem->repeat <= 0) {
+            m_nextMessageDelay = pItem->nextMessageDelay;
+            pop();
+          }
         }
       }
     }
