@@ -23,7 +23,7 @@ public:
   mouseType_t getType() const;
 
   bool readData(Ps2Report_t& data);
-  uint8_t getBufferCount() const { return m_bufferCount; };
+  uint8_t getBufferCount() const;
 
 private:
   enum class Command {
@@ -74,13 +74,6 @@ private:
   
   void startInterrupt();
   void stopInterrupt();
-  static void clockInterruptStatic();
-  void interruptHandler();
 
   mouseType_t m_type;
-  uint8_t m_mouseBits;
-  uint8_t m_bitCount;
-  uint8_t m_parityBit;
-  volatile uint8_t m_bufferTail, m_bufferHead, m_bufferCount;
-  uint8_t m_buffer[256];
 };

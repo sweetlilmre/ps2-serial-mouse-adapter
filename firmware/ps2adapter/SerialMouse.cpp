@@ -3,6 +3,13 @@
 
 static const int RS232_RTS = 3;
 static SerialMouse* classPtr = NULL;
+// set compare match register for 1200.0300007500186 Hz increments = 16000000 / (1 * 1200.0300007500186) - 1 (must be <65536)
+#define COMPA_1200_BAUD 13332
+#define UART_TX_DATA_BITS 7
+static bool txSendByteState = false;
+static uint8_t txBuffer[256];
+static volatile uint8_t txBufferHead, txBufferTail = 0;
+
 
 SerialMouse* SerialMouse::instance(mouseType_t mouseType) {
   if (classPtr == NULL) {
@@ -36,30 +43,8 @@ SerialMouse::SerialMouse(mouseType_t mouseType) {
   attachInterrupt(digitalPinToInterrupt(RS232_RTS), RTSInterruptStatic, FALLING);
 }
 
-void SerialMouse::sendBit(int data) {
-  // Delay between the signals to match 1200 baud
-  static const auto usDelay = 1000000 / 1200;
-  RS_SETTX(data);
-  delayMicroseconds(usDelay);
-}
-
-void SerialMouse::sendByte(byte data) {
-
-  // Start bit
-  sendBit(0);
-
-  // Data bits
-  for (int i = 0; i < 7; i++) {
-    sendBit((data >> i) & 0x01);
-  }
-
-  // Stop bit
-  sendBit(1);
-
-  // 7+1 bits is normal mouse protocol, but some serial controllers
-  // expect 8+1 bits format. We send additional stop bit to stay
-  // compatible to that kind of controllers.
-  sendBit(1);
+void  SerialMouse::sendByte(uint8_t data) {
+  txBuffer[txBufferHead++] = data;
 }
 
 void SerialMouse::send(const Ps2Report_t& data) {
@@ -86,10 +71,58 @@ void SerialMouse::send(const Ps2Report_t& data) {
   }
 }
 
-void SerialMouse::init() {
 
+ISR(TIMER1_COMPA_vect)
+{
+  static uint8_t txDataByte = 0;
+  static uint8_t txDataBits = 0;  
+
+  if (!txSendByteState) {
+    // if there is data to transmit
+    if (txBufferTail != txBufferHead) {
+      // switch state to byte transmission
+      txSendByteState = true;
+      // get the byte and set the byte width (7 for our case)
+      txDataByte = txBuffer[txBufferTail++];
+      txDataBits = UART_TX_DATA_BITS;
+      // Transmit the Start bit
+      // reset the overflow timer for next bit
+      RS_SETTXLOW();
+    }
+  } else {
+    // start bit is done, count down the data bits
+    if (txDataBits) {
+      txDataBits--;
+      uint8_t bit = txDataByte & 0x01;
+      txDataByte >>= 1;
+      // reset the overflow timer for next bit
+      RS_SETTX(bit);
+    } else {
+      // if all data bits are transmitted, send stop bit and go idle until next byte
+      txSendByteState = false;
+      RS_SETTXHIGH();
+    }
+  }
+}
+
+
+void SerialMouse::init() {
+  TIMSK1 &= ~(1 << OCIE1A); // Disable timer compare interrupt
   Serial.println("Starting serial port");
   RS_SETTXHIGH();
+
+  memset(txBuffer, 0, sizeof(txBuffer));
+  txBufferHead = txBufferTail = 0;
+  txSendByteState = false;
+
+  TCCR1A = 0; // set entire TCCR1A register to 0
+  TCCR1B = 0; // same for TCCR1B
+  TCNT1  = 0; // initialize counter value to 0
+  OCR1A = COMPA_1200_BAUD; // 1200.0300007500186 BAUD
+  TCCR1B |= (1 << WGM12); // turn on CTC mode
+  TCCR1B |= (0 << CS12) | (0 << CS11) | (1 << CS10); // Set CS12, CS11 and CS10 bits for 1 prescaler
+  TIMSK1 |= (1 << OCIE1A); // enable timer compare interrupt
+  
   delayMicroseconds(10000);
   sendByte('M');
   if(!twoButtons) {

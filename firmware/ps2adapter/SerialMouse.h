@@ -1,6 +1,12 @@
 #include <Arduino.h>
 #include "MouseData.h"
 
+enum UART_TX_STATE {
+  TX_IDLE,
+  TX_DATA,
+};
+
+
 class SerialMouse {
 public:
 
@@ -18,7 +24,6 @@ private:
   mouseType_t mouseType;
 
   SerialMouse(mouseType_t mouseType);
-  void sendBit(int data);
-  void sendByte(byte data);
+  void sendByte(uint8_t data);
   static void RTSInterruptStatic();
 };

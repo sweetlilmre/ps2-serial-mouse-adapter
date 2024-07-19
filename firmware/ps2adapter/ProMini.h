@@ -36,7 +36,7 @@
 #define PS2_DIRDATAIN()         ( DDRC  &= ~PS2_DATA_BIT )
 #define PS2_DIRDATAIN_UP()      ( DDRC  &= ~PS2_DATA_BIT )
 #define PS2_DIRDATAOUT()        ( DDRC  |= PS2_DATA_BIT )
-#define PS2_READDATA()          ( (PINC &= PS2_DATA_BIT)>>3 )
+#define PS2_READDATA()          ( (PINC & PS2_DATA_BIT) >> 3 )
 
 #define PS2_CLOCK_BIT           (_BV(2))
 #define PS2_SETCLOCKHIGH()      ( PORTD |= PS2_CLOCK_BIT )
@@ -45,30 +45,34 @@
 #define PS2_DIRCLOCKIN()        ( DDRD  &= ~PS2_CLOCK_BIT )
 #define PS2_DIRCLOCKIN_UP()     ( DDRD  &= ~PS2_CLOCK_BIT ); PS2_SETCLOCKHIGH()
 #define PS2_DIRCLOCKOUT()       ( DDRD  |= PS2_CLOCK_BIT )
-#define PS2_READCLOCK()         ( (PIND &= PS2_CLOCK_BIT)>>2 )
+#define PS2_READCLOCK()         ((PIND & PS2_CLOCK_BIT) >> 2 )
 
 /****************************************************/
-/* RS-232 pin operations                            */  
-#define RS_SETTXHIGH()          (PORTD |=0b00010000)
-#define RS_SETTXLOW()           (PORTD &=0b11101111)
+/* RS-232 pin operations                            */
+#define RS_TX_BIT               (_BV(4))
+#define RS_SETTXHIGH()          (PORTD |= RS_TX_BIT)
+#define RS_SETTXLOW()           (PORTD &= ~RS_TX_BIT)
 #define RS_SETTX(val)           (val) ? RS_SETTXHIGH() : RS_SETTXLOW()
-#define RS_DIRTXOUT()           (DDRD  |=0b00010000)
+#define RS_DIRTXOUT()           (DDRD  |= RS_TX_BIT)
 
 /****************************************************/
 /* JUMPER pin operations                            */
-#define JP12_SETHIGH()          (PORTB |=0b00001000)
-#define JP12_DIRIN()            (DDRB  &=0b11110111)
-#define JP12_DIRIN_UP()         (DDRB  &=0b11110111); JP12_SETHIGH()
-#define JP12_READ()             ((PINB &=0b00001000)>>3)
+#define JP12_BIT                (_BV(3))
+#define JP12_SETHIGH()          (PORTB |=JP12_BIT)
+#define JP12_DIRIN()            (DDRB  &=~JP12_BIT)
+#define JP12_DIRIN_UP()         (DDRB  &=~JP12_BIT); JP12_SETHIGH()
+#define JP12_READ()             ((PINB & JP12_BIT) >> 3)
 
-#define JP34_SETHIGH()          (PORTB |=0b00010000)
-#define JP34_DIRIN()            (DDRB  &=0b11101111)
-#define JP34_DIRIN_UP()         (DDRB  &=0b11101111); JP34_SETHIGH()
-#define JP34_READ()             ((PINB &=0b00010000)>>4)
+#define JP24_BIT                (_BV(4))
+#define JP34_SETHIGH()          (PORTB |=JP24_BIT)
+#define JP34_DIRIN()            (DDRB  &=~JP24_BIT)
+#define JP34_DIRIN_UP()         (DDRB  &=~JP24_BIT); JP34_SETHIGH()
+#define JP34_READ()             ((PINB & JP24_BIT) >> 4)
 
 /****************************************************/
 /* LED pin operations                               */
-#define LED_SETHIGH()           (PORTB |=0b00100000)
-#define LED_SETLOW()            (PORTB &=0b11011111)
+#define LED_BIT                 (_BV(5))
+#define LED_SETHIGH()           (PORTB |=LED_BIT)
+#define LED_SETLOW()            (PORTB &=~LED_BIT)
 #define LED_SET(val)            (val) ? LED_SETHIGH() : LED_SETLOW()
-#define LED_DIROUT()            (DDRB  |=0b00100000)
+#define LED_DIROUT()            (DDRB  |=LED_BIT)

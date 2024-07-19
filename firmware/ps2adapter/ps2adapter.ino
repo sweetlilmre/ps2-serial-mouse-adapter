@@ -8,6 +8,8 @@ static Ps2Mouse* pPs2Mouse;
 static SerialMouse* pSerialMouse;
 LEDMessenger blinker;
 
+
+
 void setup() {
   LED_DIROUT();
   LED_SETHIGH();
@@ -42,6 +44,7 @@ enum class SettingState {
 static SettingState settingState = SettingState::ProcessMouse;
 static unsigned long lastMillis = 0;
 static bool swapButtons = false;
+static unsigned long count = 0;
 
 void processStateMachine() {
 
@@ -62,12 +65,16 @@ void processStateMachine() {
           uint8_t temp = (data.buttons & MB_MIDDLE) | MB_L_TO_R(data.buttons) | MB_R_TO_L(data.buttons);
           data.buttons = temp;
         }
-        Serial.println("L: " + String(MB_LEFT_STATE(data.buttons)) + 
+        /*
+        Serial.println("C:" + String(count++) +
+                       "L: " + String(MB_LEFT_STATE(data.buttons)) + 
                        " M: " + String(MB_MIDDLE_STATE(data.buttons)) + 
                        " R: " + String(MB_RIGHT_STATE(data.buttons)) + 
                        " X: " + String(data.x) + 
                        " Y: " + String(data.y) + 
                        " W: " + String(data.wheel));
+                       */
+        Serial.println(count++);
         pSerialMouse->send(data);
       }
       break;

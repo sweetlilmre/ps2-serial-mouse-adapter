@@ -32,6 +32,57 @@ enum class Response {
 } // namespace
 
 static Ps2Mouse* classPtr = NULL;
+static uint8_t mouseBits;
+static uint8_t bitCount;
+static uint8_t parityBit;
+static volatile uint8_t bufferTail, bufferHead, bufferCount;
+static uint8_t buffer[256];
+
+static void clockInterrupt() {
+  uint8_t bit = PS2_READDATA();
+
+  if (bitCount == 0) {
+    // start bit should ALWAYS be 0
+    if (bit) {
+      // LED_SETHIGH();
+      // error on start bit
+      return;
+    }
+    // start bit: bit 1
+    parityBit = 1;
+    mouseBits = 0;
+    bitCount++;
+  } else if (bitCount < 9) {
+    // data bits: bits 2 - 9
+    mouseBits >>= 1;
+    mouseBits |= (bit << 7);
+    parityBit ^= bit;
+    bitCount++;
+  } else if (bitCount == 9) {
+    // parity bit: bit 10
+    // parity bit should match the calculated parity
+    // so parityBit xor bit will be 0 if parity matches:
+    // 1 ^ 1 = 0
+    // 0 ^ 0 = 0
+    // 1 ^ 0 = 1
+    // 0 ^ 1 = 1
+    parityBit ^= bit;
+    bitCount++;
+  } else {
+    // stop bit: bit 11
+    // if stop bit is 1 and parity 0, then add this byte to the buffer
+    if (bit && !parityBit) {
+      buffer[bufferHead] = mouseBits;
+      bufferCount++;
+      bufferHead++;
+      //LED_SETLOW();
+    } else {
+      // LED_SETHIGH();
+    }
+    bitCount = 0;
+  }
+}
+
 
 Ps2Mouse* Ps2Mouse::instance() {
 
@@ -47,14 +98,18 @@ Ps2Mouse::Ps2Mouse()
   // or the mouse will not initialize
   PS2_DIRDATAIN_UP();
   m_type = mouseType_t::threeButton;
-  m_mouseBits = 0;
-  m_bitCount = 0;
-  m_parityBit = 0;
-  m_bufferTail = 0;
-  m_bufferHead = 0;
-  m_bufferCount = 0;
-  memset(m_buffer, 0, 256);
+  mouseBits = 0;
+  bitCount = 0;
+  parityBit = 0;
+  bufferTail = 0;
+  bufferHead = 0;
+  bufferCount = 0;
+  memset(buffer, 0, 256);
 }
+
+uint8_t Ps2Mouse::getBufferCount() const {
+   return bufferCount; 
+};
 
 bool Ps2Mouse::init() {
 
@@ -183,31 +238,25 @@ mouseType_t Ps2Mouse::getType() const {
   return m_type;
 }
 
-void Ps2Mouse::clockInterruptStatic() {
-
-  if (classPtr != NULL) {
-    classPtr->interruptHandler();
-  }
-}
 
 void Ps2Mouse::startInterrupt() {
 
   // Enter receive mode
   PS2_DIRCLOCKIN();
   PS2_DIRDATAIN();
-  m_mouseBits = 0;
-  m_bitCount = 0;
-  m_bufferHead = m_bufferTail = m_bufferCount = 0;
-  memset(m_buffer, 0, 256);
-  attachInterrupt(0, clockInterruptStatic, FALLING);
+  mouseBits = 0;
+  bitCount = 0;
+  bufferHead = bufferTail = bufferCount = 0;
+  memset(buffer, 0, 256);
+  attachInterrupt(0, clockInterrupt, FALLING);
 }
 
 void Ps2Mouse::stopInterrupt() {
   detachInterrupt(0);
-  m_mouseBits = 0;
-  m_bitCount = 0;
-  m_bufferHead = m_bufferTail = m_bufferCount = 0;
-  memset(m_buffer, 0, 256);
+  mouseBits = 0;
+  bitCount = 0;
+  bufferHead = bufferTail = bufferCount = 0;
+  memset(buffer, 0, 256);
 }
 
 
@@ -218,7 +267,7 @@ bool Ps2Mouse::readData(Ps2Report_t& data) {
     pktSize--;
   }
 
-  if (m_bufferCount < pktSize) {
+  if (bufferCount < pktSize) {
     return false;
   }
 
@@ -241,61 +290,15 @@ bool Ps2Mouse::readData(Ps2Report_t& data) {
 }
 
 
-void Ps2Mouse::interruptHandler() {
-  
-  uint8_t bit = PS2_READDATA();
-
-  if (m_bitCount == 0) {
-    // start bit should ALWAYS be 0
-    if (bit) {
-      // LED_SETHIGH();
-      // error on start bit
-      return;
-    }
-    // start bit: bit 1
-    m_parityBit = 1;
-    m_mouseBits = 0;
-    m_bitCount++;
-  } else if (m_bitCount < 9) {
-    // data bits: bits 2 - 9
-    m_mouseBits >>= 1;
-    m_mouseBits |= (bit << 7);
-    m_parityBit ^= bit;
-    m_bitCount++;
-  } else if (m_bitCount == 9) {
-    // parity bit: bit 10
-    // parity bit should match the calculated parity
-    // so m_parityBit xor bit will be 0 if parity matches:
-    // 1 ^ 1 = 0
-    // 0 ^ 0 = 0
-    // 1 ^ 0 = 1
-    // 0 ^ 1 = 1
-    m_parityBit ^= bit;
-    m_bitCount++;
-  } else {
-    // stop bit: bit 11
-    // if stop bit is 1 and parity 0, then add this byte to the buffer
-    if (bit && !m_parityBit) {
-      m_buffer[m_bufferHead] = m_mouseBits;
-      m_bufferCount++;
-      m_bufferHead++;
-      //LED_SETLOW();
-    } else {
-      // LED_SETHIGH();
-    }
-    m_bitCount = 0;
-  }
-}
-
 bool Ps2Mouse::getByte(uint8_t& data) {
   unsigned long count = 0;
-  while (m_bufferHead == m_bufferTail) {
+  while (bufferHead == bufferTail) {
     if (count++ > 5000000) {
       return false;
     }
   }
-  m_bufferCount--;
-  data = m_buffer[m_bufferTail++];
+  bufferCount--;
+  data = buffer[bufferTail++];
   return true;
 }
 

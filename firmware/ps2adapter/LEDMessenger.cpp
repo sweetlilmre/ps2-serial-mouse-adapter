@@ -27,9 +27,9 @@ void LEDMessenger::TimerStatic() {
 typedef void (*voidFuncPtr)(void);
 static volatile voidFuncPtr intFunc = NULL;
 
-ISR(TIMER1_OVF_vect)
+ISR(TIMER2_OVF_vect)
 {
-  TCNT1 = 45535;        // Timer Preloading
+  TCNT2 = 99;        // Timer Preloading
   if (intFunc != NULL)
     intFunc();
 }
@@ -38,11 +38,11 @@ void LEDMessenger::start() {
   instance = this;
   intFunc = TimerStatic;
   LED_SETLOW();
-  TCCR1A = 0;           // Init Timer1A
-  TCCR1B = 0;           // Init Timer1B
-  TCCR1B |= B00000010;  // Prescaler = 64
-  TCNT1 = 45535;        // Timer Preloading
-  TIMSK1 |= B00000001;  // Enable Timer Overflow Interrupt
+  TCCR2A = 0;           // Init Timer2A
+  TCCR2B = 0;           // Init Timer2B
+  TCCR2B  |= (1 << CS22) | (1 << CS21) | (1 << CS20); // Prescaler = 1024
+  TCNT2 = 99;          // Timer Preloading
+  TIMSK2  |= (1 << TOIE2);  // Enable Timer Overflow Interrupt
 };
 
 void LEDMessenger::push(int delay, int repeat, int nextMessageDelay) {
