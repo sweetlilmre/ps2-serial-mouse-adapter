@@ -44,7 +44,7 @@ enum class SettingState {
 static SettingState settingState = SettingState::ProcessMouse;
 static unsigned long lastMillis = 0;
 static bool swapButtons = false;
-static unsigned long count = 0;
+//static unsigned long count = 0;
 
 void processStateMachine() {
 
@@ -74,8 +74,10 @@ void processStateMachine() {
                        " Y: " + String(data.y) + 
                        " W: " + String(data.wheel));
                        */
-        Serial.println(count++);
-        pSerialMouse->send(data);
+        //Serial.println(count++);
+        if (pSerialMouse->update(data)) {
+          pSerialMouse->send();
+        }
       }
       break;
 
@@ -130,7 +132,7 @@ void loop() {
   }
 
   if (pSerialMouse->isInitialized()) {
-    processStateMachine();
+    processStateMachine();   
   }
 }
 

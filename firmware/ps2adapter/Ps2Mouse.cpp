@@ -122,8 +122,11 @@ bool Ps2Mouse::init() {
     return false;
   }
 
-  if (setSampleRate(20)) {
-    Serial.println("Sample rate set to 20");
+#define PS2_SAMPLE_RATE 80
+
+  if (setSampleRate(PS2_SAMPLE_RATE)) {
+    Serial.print("Sample rate set to: ");
+    Serial.println(PS2_SAMPLE_RATE);
   } else {
     Serial.println("Failed to set sample rate");
     return false;
