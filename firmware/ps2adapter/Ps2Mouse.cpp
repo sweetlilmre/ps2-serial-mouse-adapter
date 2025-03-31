@@ -72,9 +72,8 @@ static void clockInterrupt() {
     // stop bit: bit 11
     // if stop bit is 1 and parity 0, then add this byte to the buffer
     if (bit && !parityBit) {
-      buffer[bufferHead] = mouseBits;
+      buffer[bufferHead++] = mouseBits;
       bufferCount++;
-      bufferHead++;
       //LED_SETLOW();
     } else {
       // LED_SETHIGH();
@@ -203,10 +202,10 @@ bool Ps2Mouse::setScaling(bool flag) {
   return res;
 }
 
-bool Ps2Mouse::setResolution(byte resolution) {
+bool Ps2Mouse::setResolution(Ps2Resolution_t resolution) {
   
   setReporting(false);
-  bool res = sendCommand(Command::setResolution, resolution);
+  bool res = sendCommand(Command::setResolution, (byte) resolution);
   setReporting(true);
   return res;
 }

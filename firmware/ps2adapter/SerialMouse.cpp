@@ -14,7 +14,7 @@
   #define SERIAL_BYTE_SIZE 9  // 1 start bit, 7 data bits, 1 stop bit
 #endif
 
-static const double bitDelay = 1000000 / BAUD_RATE; // Delay between the signals to match 1200 baud
+static const double bitDelay = (double) 1000000 / BAUD_RATE; // Delay between the signals to match 1200 baud
 static const unsigned long pktTime_2btn = (bitDelay * SERIAL_BYTE_SIZE * 3);
 static const unsigned long pktTime_3btn = (bitDelay * SERIAL_BYTE_SIZE * 4);
 
@@ -30,7 +30,6 @@ SerialMouse* SerialMouse::instance(mouseType_t mouseType) {
   if (classPtr == NULL) {
     classPtr = new SerialMouse(mouseType);
   }
-  Serial.println(bitDelay);
   return classPtr;
 }
 
@@ -89,8 +88,15 @@ void SerialMouse::send() {
 
   uint8_t dataBytes[4] = {0, 0, 0, 0};
   uint8_t len = 3;
-  auto dx = constrain(report.x, -127, 127);
-  auto dy = constrain(-report.y, -127, 127);
+
+  int16_t sensitivity = 0xF0;
+  int16_t tmpX = report.x;
+  int16_t tmpY = report.y;
+  tmpX = (tmpX * sensitivity) >> 8;
+  tmpY = (tmpY * sensitivity) >> 8;
+
+  auto dx = constrain(tmpX, -127, 127);
+  auto dy = constrain(-tmpY, -127, 127);
   byte lb = (report.buttons & MB_LEFT) ? 0x20 : 0;
   byte rb = (report.buttons & MB_RIGHT) ? 0x10 : 0;
   dataBytes[0] = 0x40 | lb | rb | ((dy >> 4) & 0xC) | ((dx >> 6) & 0x3);

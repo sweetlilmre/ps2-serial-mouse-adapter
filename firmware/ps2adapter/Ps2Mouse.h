@@ -3,6 +3,13 @@
 #include <Arduino.h>
 #include "MouseData.h"
 
+typedef enum PS2_RESOLUTION {
+  CNT_1_PER_MM = 0,
+  CNT_2_PER_MM = 1,
+  CNT_4_PER_MM = 2,
+  CNT_8_PER_MM = 3,
+} Ps2Resolution_t;
+
 class Ps2Mouse {
 
 public:
@@ -16,7 +23,7 @@ public:
   bool setRemoteMode();
 
   bool setScaling(bool flag);
-  bool setResolution(byte resolution);
+  bool setResolution(Ps2Resolution_t resolution);
   bool setSampleRate(byte sampleRate);
 
   bool getSettings(Ps2Settings_t& settings);
